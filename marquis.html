@@ -841,53 +841,39 @@ function hideTyping() {
   if (el) el.remove();
 }
 
-/* ── Claude API Call ── */
+/* ── Gemini API via FastAPI backend ── */
 async function callClaude(userMsg) {
   history.push({ role: 'user', content: userMsg });
 
-  const convo = [
-    {
-      role: 'user',
-      content: [{ type: 'text', text: SYSTEM_PROMPT }]
-    },
-    {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'Good day. I am Marquis, at your service.' }]
-    },
-    ...history.map(m => ({
-      role: m.role,
-      content: [{ type: 'text', text: m.content }]
-    }))
-  ];
+  // Exclude the most recent user message from history payload
+  const historyPayload = history
+    .slice(0, -1)
+    .map((m) => ({ role: m.role, content: m.content }));
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 1000,
-        messages: convo
-      })
+        message: userMsg,
+        history: historyPayload,
+      }),
     });
 
     if (!res.ok) throw new Error('API error: ' + res.status);
     const data = await res.json();
-    const block = Array.isArray(data.content)
-      ? data.content.find(b => b.type === 'text')
-      : null;
-    const reply = block && block.text
-      ? block.text
-      : 'I seem to have misplaced my usual eloquence; do indulge me with another question.';
+    const reply =
+      data.response ||
+      'I seem to have misplaced my usual eloquence; do indulge me with another question.';
 
     history.push({ role: 'assistant', content: reply });
     return reply;
   } catch (err) {
-    console.error('Claude API Error:', err);
-    const fallback = "Good heavens, it appears my connection has stumbled. Kindly try again in a moment, dear applicant.";
+    console.error('Gemini API Error:', err);
+    const fallback =
+      'Good heavens, it appears my connection has stumbled. Kindly try again in a moment, dear applicant.';
     history.push({ role: 'assistant', content: fallback });
     return fallback;
   }
